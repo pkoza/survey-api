@@ -4,6 +4,10 @@ import {QUESTIONS} from "../enums/enums";
 
 const router = express.Router();
 
+interface AggregatedAnswers {
+    values: Array<string>,
+    counts: Array<number>
+}
 router.post("/survey", async (req, res) => {
     try {
         console.log("Received post survey", req)
@@ -48,21 +52,19 @@ router.get("/results", async (req, res) => {
     try {
         const results = await AnsweredQuestion.find({ question: { $ne: 'name' } });
 
-        const formattedResults = results.map((answeredQuestionDoc) => {
-            const topAnswers = answeredQuestionDoc.answers
+        const formattedResults = results.reduce((acc, curr) => {
+            const topAnswers = curr.answers
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 5);
-            const topAnswersAggregated = topAnswers.reduce((acc, curr: IAnswer) => {
-                acc.labels.push(curr.value);
-                acc.counts.push(curr.count);
-                return acc;
-            }, {labels:[] as Array<string>, counts:[] as Array<number>})
+            const topAnswersAggregated = topAnswers.reduce((answerAcc, answerCurr: IAnswer) => {
+                answerAcc.values.push(answerCurr.value);
+                answerAcc.counts.push(answerCurr.count);
+                return answerAcc;
+            }, {values:[], counts:[]} as AggregatedAnswers)
 
-            return {
-                question: answeredQuestionDoc.question,
-                answers: topAnswersAggregated
-            };
-        });
+            acc[curr.question] = topAnswersAggregated;
+            return acc;
+        }, {} as Record<string, AggregatedAnswers>);
         res.status(200).json(formattedResults);
     } catch (error) {
         console.error(error);
